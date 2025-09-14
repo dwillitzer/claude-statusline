@@ -220,36 +220,14 @@ else
     # Look for transcripts in the current project area
     project_path=$(echo "$current_dir" | sed 's|/|-|g')
 
-    # Find all transcripts in this project and analyze them to find the current session
-    # Current session should have moderate token count (30-50k range including system overhead)
-    candidate_transcripts=$(find ~/.claude/projects -path "*$project_path*" -name "*.jsonl" -type f 2>/dev/null)
+    # Find the most recent transcript by modification time
+    # Skip large files (>10MB) as they're likely old compacted sessions
+    recent_transcript=$(find ~/.claude/projects -path "*$project_path*" -name "*.jsonl" -type f -size -10M -print0 2>/dev/null | xargs -0 stat -f "%m %N" 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
-    best_transcript=""
-    target_tokens=39000  # Expected current session size based on /context output
-    closest_diff=999999
-
-    while IFS= read -r transcript; do
-        if [[ -f "$transcript" ]]; then
-            if command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-enhanced-token-counter.js" ]]; then
-                tokens=$(node "/Users/devops/.claude/claude-enhanced-token-counter.js" "$transcript" "gpt-4" 2>/dev/null || echo "0")
-            else
-                # Fallback to character estimation
-                size=$(wc -c < "$transcript" 2>/dev/null || echo "0")
-                tokens=$((size / 125))
-            fi
-
-            # Find the transcript closest to our target token count (30-50k range)
-            if [[ $tokens -ge 25000 && $tokens -le 60000 ]]; then
-                diff=$((tokens > target_tokens ? tokens - target_tokens : target_tokens - tokens))
-                if [[ $diff -lt $closest_diff ]]; then
-                    closest_diff=$diff
-                    best_transcript="$transcript"
-                fi
-            fi
-        fi
-    done <<< "$candidate_transcripts"
-
-    recent_transcript="$best_transcript"
+    # If no small transcript found, get the most recent regardless of size
+    if [[ -z "$recent_transcript" ]]; then
+        recent_transcript=$(find ~/.claude/projects -path "*$project_path*" -name "*.jsonl" -type f -print0 2>/dev/null | xargs -0 stat -f "%m %N" 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+    fi
 
     # If found, extract session ID from filename
     if [[ -f "$recent_transcript" ]]; then
@@ -273,14 +251,22 @@ if [[ -f "$transcript_path" ]]; then
         *) tiktoken_model="gpt-4" ;; # Default fallback
     esac
 
-    # Count transcript tokens first
-    if command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-enhanced-token-counter.js" ]]; then
+    # Check file size first to avoid processing huge files
+    transcript_size=$(wc -c < "$transcript_path" 2>/dev/null || echo "0")
+
+    # If file is larger than 10MB, use character estimation instead of token counting
+    # This prevents hanging on huge transcript files
+    if [[ $transcript_size -gt 10485760 ]]; then
+        # Use character estimation for large files
+        chars_per_token=${CLAUDE_CHARS_PER_TOKEN:-125}
+        transcript_tokens=$((transcript_size / chars_per_token))
+    elif command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-enhanced-token-counter.js" ]]; then
+        # Use accurate token counting for normal-sized files
         transcript_tokens=$(node "/Users/devops/.claude/claude-enhanced-token-counter.js" "$transcript_path" "$tiktoken_model" 2>/dev/null || echo "0")
     elif command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-token-counter.js" ]]; then
         transcript_tokens=$(node "/Users/devops/.claude/claude-token-counter.js" "$transcript_path" 2>/dev/null || echo "0")
     else
         # Fallback to character estimation if Node.js or token counter not available
-        transcript_size=$(wc -c < "$transcript_path" 2>/dev/null || echo "0")
         chars_per_token=${CLAUDE_CHARS_PER_TOKEN:-125}
         transcript_tokens=$((transcript_size / chars_per_token))
     fi
@@ -443,6 +429,12 @@ if [[ -f "$transcript_path" ]]; then
     total_overhead=$((system_prompt_overhead + system_tools_overhead + mcp_overhead + memory_overhead))
     estimated_tokens=$((transcript_tokens + total_overhead - message_overlap))
     context_limit=200000
+
+    # Cap tokens at reasonable maximum (context can't exceed 400k in practice)
+    if [[ $estimated_tokens -gt 400000 ]]; then
+        # If tokens are extremely high, fall back to simpler calculation
+        estimated_tokens=$((transcript_tokens / 10 + total_overhead))
+    fi
 
     # Prevent division by zero and handle large numbers properly
     if [[ $context_limit -gt 0 ]]; then
