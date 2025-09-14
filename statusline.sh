@@ -45,6 +45,7 @@ while [[ $# -gt 0 ]]; do
             echo "  %time%       - Current time"
             echo "  %last%       - Time since last message"
             echo "  %project%    - Project name"
+            echo "  %message%    - Last message preview (first 5 words)"
             echo ""
             echo "Examples:"
             echo "  $0 --compact"
@@ -509,13 +510,29 @@ fi
 if [[ -f "$real_transcript" ]]; then
     # Find the most recent user message (human input, not tool results)
     # Look for messages that originate from human input
-    last_human_timestamp=$(tail -r "$real_transcript" 2>/dev/null | while IFS= read -r line; do
+    # Find last human message timestamp and content
+    last_human_data=$(tail -r "$real_transcript" 2>/dev/null | while IFS= read -r line; do
         # Look for actual human messages (not tool results) - handle both string and array content
         if echo "$line" | jq -e '.type == "user" and .message.role == "user" and (.message.content | type | . == "string" or . == "array")' >/dev/null 2>&1; then
-            echo "$line" | jq -r '.timestamp' 2>/dev/null
+            timestamp=$(echo "$line" | jq -r '.timestamp' 2>/dev/null)
+            # Extract message content - handle both string and array formats
+            content=$(echo "$line" | jq -r '
+                if .message.content | type == "string" then
+                    .message.content
+                elif .message.content | type == "array" then
+                    .message.content[] | select(.type == "text") | .text // empty
+                else
+                    empty
+                end' 2>/dev/null | head -1)
+            # Output both timestamp and content separated by a delimiter
+            echo "${timestamp}|||${content}"
             break
         fi
     done)
+
+    # Split the data
+    last_human_timestamp="${last_human_data%%|||*}"
+    last_human_message="${last_human_data#*|||}"
 
     if [[ -n "$last_human_timestamp" ]]; then
         # Convert ISO timestamp to epoch seconds using cross-platform function
@@ -568,6 +585,36 @@ fi
 
 # Project context (shortened path)
 project_name=$(basename "$current_dir")
+
+# Format last message preview (first 5 words or less)
+if [[ -n "$last_human_message" ]]; then
+    # Clean up the message (remove extra whitespace, newlines)
+    clean_message=$(echo "$last_human_message" | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//')
+
+    # Extract first 5 words
+    word_count=0
+    message_preview=""
+    for word in $clean_message; do
+        if [[ $word_count -lt 5 ]]; then
+            message_preview="${message_preview} ${word}"
+            word_count=$((word_count + 1))
+        else
+            break
+        fi
+    done
+
+    # Trim and add ellipsis if message was longer
+    message_preview=$(echo "$message_preview" | sed 's/^ *//')
+    remaining_text="${clean_message#$message_preview}"
+    if [[ -n "$remaining_text" && "$remaining_text" != " " ]]; then
+        message_preview="${message_preview}..."
+    fi
+
+    # Add speech bubble emoji
+    message_display="💬 \"${message_preview}\""
+else
+    message_display=""
+fi
 
 # Detect model and set appropriate color
 # Extract model name from transcript if not provided
@@ -626,14 +673,29 @@ fi
 # Build status line based on selected mode
 case "$STATUSLINE_MODE" in
     "compact")
-        # Compact mode: Model, context, time, project
-        printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[95m%s\033[0m\n" \
-            "$model_color" \
-            "$model_display" \
-            "$context_percent" \
-            "$msg_color" \
-            "$last_msg" \
-            "$project_name"
+        # Compact mode: Model, context, message/time, project
+        if [[ -n "$message_display" ]]; then
+            # Show truncated message preview (first 3 words for compact)
+            compact_message=$(echo "$message_preview" | awk '{print $1, $2, $3}' | sed 's/ *$//')
+            if [[ "$message_preview" != "$compact_message" ]]; then
+                compact_message="${compact_message}..."
+            fi
+            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • 💬 \"%s\" • \033[95m%s\033[0m\n" \
+                "$model_color" \
+                "$model_display" \
+                "$context_percent" \
+                "$compact_message" \
+                "$project_name"
+        else
+            # Fall back to time if no message
+            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[95m%s\033[0m\n" \
+                "$model_color" \
+                "$model_display" \
+                "$context_percent" \
+                "$msg_color" \
+                "$last_msg" \
+                "$project_name"
+        fi
         ;;
 
     "custom")
@@ -647,19 +709,33 @@ case "$STATUSLINE_MODE" in
         output="${output//\%time\%/$pst_time}"
         output="${output//\%last\%/$last_msg}"
         output="${output//\%project\%/$project_name}"
+        output="${output//\%message\%/$message_display}"
         echo "$output"
         ;;
 
     "verbose"|*)
         # Verbose mode (default): Model first, then full information
-        printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[95m%s\033[0m\n" \
-            "$model_color" \
-            "$model_display" \
-            "$context_info" \
-            "$session_date" \
-            "$pst_time" \
-            "$msg_color" \
-            "$last_msg" \
-            "$project_name"
+        if [[ -n "$message_display" ]]; then
+            # Show message preview instead of last time
+            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m %s \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+                "$model_color" \
+                "$model_display" \
+                "$context_info" \
+                "$session_date" \
+                "$pst_time" \
+                "$message_display" \
+                "$project_name"
+        else
+            # If no message, show timing instead
+            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+                "$model_color" \
+                "$model_display" \
+                "$context_info" \
+                "$session_date" \
+                "$pst_time" \
+                "$msg_color" \
+                "$last_msg" \
+                "$project_name"
+        fi
         ;;
 esac
