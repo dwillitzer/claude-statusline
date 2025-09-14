@@ -4,11 +4,13 @@ A real-time context usage monitor for Claude Code CLI that provides accurate tok
 
 ## Features
 
+- **Model Display** - Shows current model (Opus, Sonnet, Haiku) with color-coding
 - **Real-time Context Tracking** - Accurate token counting using tiktoken library
 - **Multiple Display Modes** - Verbose, compact, and customizable formats
 - **Cross-platform Support** - Works on macOS, Linux, and Windows
 - **Session Auto-detection** - Automatically finds and tracks current Claude session
 - **Dynamic Configuration** - Detects Claude Code's hierarchical configuration system
+- **Theme-aware Colors** - Adapts colors based on Claude Code theme (when available)
 - **Native Compatibility** - Works with native tools, no external dependencies required
 
 ## Display Modes
@@ -16,19 +18,19 @@ A real-time context usage monitor for Claude Code CLI that provides accurate tok
 ### Verbose Mode (Default)
 Shows complete information with visual separators:
 ```
-▸ Context: 35% (129k left) ▸ Session: 09/14 ▸ 03:11 PM PST ▸ Last: 1h ▸ project-name
+Sonnet ▸ Context: 35% (129k left) ▸ Session: 09/14 ▸ 03:11 PM PST ▸ Last: 1h ▸ project-name
 ```
 
 ### Compact Mode
 Minimal display with just the essentials:
 ```
-35% • 1h • project-name
+Sonnet • 35% • 1h • project-name
 ```
 
 ### Custom Mode
 Create your own format using template variables:
 ```
-📊 35% | ⏰ 1h | 📁 project-name
+🤖 Sonnet | 📊 35% | ⏰ 1h | 📁 project-name
 ```
 
 ## Installation
@@ -188,6 +190,7 @@ Available variables for custom formats:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
+| `%model%` | Model name | `Sonnet` |
 | `%context%` | Context usage with color | `35% (129k left)` |
 | `%percent%` | Context percentage only | `35%` |
 | `%remaining%` | Remaining tokens | `129k left` |
@@ -200,21 +203,34 @@ Available variables for custom formats:
 
 ```bash
 # Minimal
---format '%percent%'
-# Output: 35%
+--format '%model%: %percent%'
+# Output: Sonnet: 35%
 
 # With emojis
---format '📊 %percent% | ⏰ %last% | 📁 %project%'
-# Output: 📊 35% | ⏰ 1h | 📁 project-name
+--format '🤖 %model% | 📊 %percent% | ⏰ %last% | 📁 %project%'
+# Output: 🤖 Sonnet | 📊 35% | ⏰ 1h | 📁 project-name
 
 # Professional
---format 'Context: %percent% (%remaining%) - %project%'
-# Output: Context: 35% (129k left) - project-name
+--format '%model% - Context: %percent% (%remaining%) - %project%'
+# Output: Sonnet - Context: 35% (129k left) - project-name
 
 # Timestamp focused
---format '[%time%] %percent% - Last: %last%'
-# Output: [03:11 PM PST] 35% - Last: 1h
+--format '[%time%] %model% %percent% - Last: %last%'
+# Output: [03:11 PM PST] Sonnet 35% - Last: 1h
 ```
+
+## Model Color Coding
+
+The statusline automatically color-codes models for quick identification:
+
+- **Opus** - Magenta (most capable)
+- **Sonnet** - Cyan (balanced)
+- **Haiku** - Green (fastest)
+- **Claude 3** - Blue
+- **Instant** - Yellow
+- **Default** - White
+
+Colors adapt to your terminal theme when possible.
 
 ## How It Works
 

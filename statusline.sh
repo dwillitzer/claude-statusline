@@ -37,6 +37,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -f, --format FORMAT  Use custom format with template"
             echo ""
             echo "Template variables for custom format:"
+            echo "  %model%      - Model name (Opus, Sonnet, etc.)"
             echo "  %context%    - Context usage with color"
             echo "  %percent%    - Context percentage number"
             echo "  %remaining%  - Remaining tokens display"
@@ -568,11 +569,67 @@ fi
 # Project context (shortened path)
 project_name=$(basename "$current_dir")
 
+# Detect model and set appropriate color
+# Extract model name from transcript if not provided
+if [[ -z "$model_name" || "$model_name" == "Claude" ]] && [[ -f "$real_transcript" ]]; then
+    # Try to extract model from recent transcript entries
+    detected_model=$(tail -5 "$real_transcript" 2>/dev/null | jq -r '.message.model // empty' 2>/dev/null | grep -v '^$' | head -1)
+    if [[ -n "$detected_model" ]]; then
+        model_name="$detected_model"
+    fi
+fi
+
+# Format model name for display (shorten if needed)
+model_display="$model_name"
+case "$model_name" in
+    *"opus"*|*"Opus"*)
+        model_display="Opus"
+        model_color="35"  # Magenta for Opus
+        ;;
+    *"sonnet"*|*"Sonnet"*)
+        model_display="Sonnet"
+        model_color="36"  # Cyan for Sonnet
+        ;;
+    *"haiku"*|*"Haiku"*)
+        model_display="Haiku"
+        model_color="32"  # Green for Haiku
+        ;;
+    *"claude-3"*)
+        model_display="Claude 3"
+        model_color="34"  # Blue for Claude 3
+        ;;
+    *"claude-instant"*)
+        model_display="Instant"
+        model_color="33"  # Yellow for Instant
+        ;;
+    *)
+        # Default to extracting version if present
+        if [[ "$model_name" =~ claude-([0-9]+) ]]; then
+            model_display="Claude ${BASH_REMATCH[1]}"
+        else
+            model_display="Claude"
+        fi
+        model_color="37"  # White for default
+        ;;
+esac
+
+# Detect theme from environment or settings (future enhancement)
+# For now, use the JSON input to check for theme hints
+theme_name=$(echo "$input" | jq -r '.theme // .appearance // "default"' 2>/dev/null)
+
+# Adjust colors based on theme (if available)
+if [[ "$theme_name" == "light" || "$theme_name" == "day" ]]; then
+    # Light theme - use darker/bolder colors
+    model_color="1;${model_color}"  # Bold version
+fi
+
 # Build status line based on selected mode
 case "$STATUSLINE_MODE" in
     "compact")
-        # Compact mode: Just the essentials
-        printf "\033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[95m%s\033[0m\n" \
+        # Compact mode: Model, context, time, project
+        printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[95m%s\033[0m\n" \
+            "$model_color" \
+            "$model_display" \
             "$context_percent" \
             "$msg_color" \
             "$last_msg" \
@@ -582,6 +639,7 @@ case "$STATUSLINE_MODE" in
     "custom")
         # Custom mode: Use template with variable substitution
         output="$CUSTOM_FORMAT"
+        output="${output//\%model\%/$model_display}"
         output="${output//\%context\%/$context_info}"
         output="${output//\%percent\%/${context_percent}%}"
         output="${output//\%remaining\%/${remaining_display}}"
@@ -593,8 +651,10 @@ case "$STATUSLINE_MODE" in
         ;;
 
     "verbose"|*)
-        # Verbose mode (default): Full information display
-        printf "\033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+        # Verbose mode (default): Model first, then full information
+        printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+            "$model_color" \
+            "$model_display" \
             "$context_info" \
             "$session_date" \
             "$pst_time" \
