@@ -5,32 +5,34 @@ A real-time context usage monitor for Claude Code CLI that provides accurate tok
 ## Features
 
 - **Model Display** - Shows current model (Opus, Sonnet, Haiku) with color-coding
+- **Message Preview** - Displays first 5 words of your last message with 💬 emoji
 - **Real-time Context Tracking** - Accurate token counting using tiktoken library
+- **Smart Message Filtering** - Filters out command outputs and system messages for clean previews
 - **Multiple Display Modes** - Verbose, compact, and customizable formats
 - **Cross-platform Support** - Works on macOS, Linux, and Windows
 - **Session Auto-detection** - Automatically finds and tracks current Claude session
 - **Dynamic Configuration** - Detects Claude Code's hierarchical configuration system
-- **Theme-aware Colors** - Adapts colors based on Claude Code theme (when available)
+- **Theme-aware Colors** - Blue theme by default with model-specific colors
 - **Native Compatibility** - Works with native tools, no external dependencies required
 
 ## Display Modes
 
 ### Verbose Mode (Default)
-Shows complete information with visual separators:
+Shows complete information with visual separators and message preview:
 ```
-Sonnet ▸ Context: 35% (129k left) ▸ Session: 09/14 ▸ 03:11 PM PST ▸ Last: 1h ▸ project-name
+Sonnet ▸ Context: 35% (129k left) ▸ Session: 09/14 ▸ 03:11 PM PST ▸ 💬 "can you help me fix..." ▸ project-name
 ```
 
 ### Compact Mode
-Minimal display with just the essentials:
+Minimal display with message preview (3 words):
 ```
-Sonnet • 35% • 1h • project-name
+Sonnet • 35% • 💬 "can you help..." • project-name
 ```
 
 ### Custom Mode
 Create your own format using template variables:
 ```
-🤖 Sonnet | 📊 35% | ⏰ 1h | 📁 project-name
+🤖 Sonnet | 📊 35% | 💬 "can you help me fix..." | 📁 project-name
 ```
 
 ## Installation
@@ -223,14 +225,26 @@ Available variables for custom formats:
 
 The statusline automatically color-codes models for quick identification:
 
-- **Opus** - Magenta (most capable)
-- **Sonnet** - Cyan (balanced)
+- **Opus** - Magenta/Pink (most capable)
+- **Sonnet** - Blue (balanced performance)
 - **Haiku** - Green (fastest)
 - **Claude 3** - Blue
 - **Instant** - Yellow
-- **Default** - White
+- **Default** - Blue
 
-Colors adapt to your terminal theme when possible.
+The default blue theme provides a cohesive look, with Opus distinguished in magenta/pink for its premium tier.
+
+## Message Filtering
+
+The statusline intelligently filters out non-user messages to show clean previews:
+
+**Filtered Out:**
+- Command outputs (`<local-command-stdout>`)
+- System reminders (`<system-reminder>`)
+- Command names (`<command-name>`)
+- Auto-responses ("No response requested")
+
+This ensures the message preview shows your actual questions and requests, not system noise.
 
 ## How It Works
 
