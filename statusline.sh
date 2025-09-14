@@ -637,23 +637,23 @@ fi
 # Format model name for display (shorten if needed)
 model_display="$model_name"
 case "$model_name" in
-    *"opus"*|*"Opus"*)
+    *opus*|*Opus*)
         model_display="Opus"
         model_color="35"  # Magenta for Opus
         ;;
-    *"sonnet"*|*"Sonnet"*)
+    *sonnet*|*Sonnet*)
         model_display="Sonnet"
         model_color="34"  # Blue for Sonnet (changed from cyan)
         ;;
-    *"haiku"*|*"Haiku"*)
+    *haiku*|*Haiku*)
         model_display="Haiku"
         model_color="32"  # Green for Haiku
         ;;
-    *"claude-3"*)
+    *claude-3*)
         model_display="Claude 3"
         model_color="34"  # Blue for Claude 3
         ;;
-    *"claude-instant"*)
+    *claude-instant*)
         model_display="Instant"
         model_color="33"  # Yellow for Instant
         ;;
