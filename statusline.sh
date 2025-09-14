@@ -524,9 +524,17 @@ if [[ -f "$real_transcript" ]]; then
                 else
                     empty
                 end' 2>/dev/null | head -1)
-            # Output both timestamp and content separated by a delimiter
-            echo "${timestamp}|||${content}"
-            break
+
+            # Filter out command outputs and system messages
+            if [[ "$content" != *"<local-command-stdout>"* ]] && \
+               [[ "$content" != *"<command-name>"* ]] && \
+               [[ "$content" != *"<system-reminder>"* ]] && \
+               [[ "$content" != "No response requested"* ]] && \
+               [[ -n "$content" ]]; then
+                # Output both timestamp and content separated by a delimiter
+                echo "${timestamp}|||${content}"
+                break
+            fi
         fi
     done)
 
@@ -635,7 +643,7 @@ case "$model_name" in
         ;;
     *"sonnet"*|*"Sonnet"*)
         model_display="Sonnet"
-        model_color="36"  # Cyan for Sonnet
+        model_color="34"  # Blue for Sonnet (changed from cyan)
         ;;
     *"haiku"*|*"Haiku"*)
         model_display="Haiku"
@@ -656,7 +664,7 @@ case "$model_name" in
         else
             model_display="Claude"
         fi
-        model_color="37"  # White for default
+        model_color="34"  # Blue for default (changed from white)
         ;;
 esac
 
@@ -680,7 +688,7 @@ case "$STATUSLINE_MODE" in
             if [[ "$message_preview" != "$compact_message" ]]; then
                 compact_message="${compact_message}..."
             fi
-            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • 💬 \"%s\" • \033[95m%s\033[0m\n" \
+            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • 💬 \"%s\" • \033[34m%s\033[0m\n" \
                 "$model_color" \
                 "$model_display" \
                 "$context_percent" \
@@ -688,7 +696,7 @@ case "$STATUSLINE_MODE" in
                 "$project_name"
         else
             # Fall back to time if no message
-            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[95m%s\033[0m\n" \
+            printf "\033[%sm%s\033[0m • \033[32m%d%%\033[0m • \033[%sm%s\033[0m • \033[34m%s\033[0m\n" \
                 "$model_color" \
                 "$model_display" \
                 "$context_percent" \
@@ -717,7 +725,7 @@ case "$STATUSLINE_MODE" in
         # Verbose mode (default): Model first, then full information
         if [[ -n "$message_display" ]]; then
             # Show message preview instead of last time
-            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m %s \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m %s \033[36m▸\033[0m \033[34m%s\033[0m\n" \
                 "$model_color" \
                 "$model_display" \
                 "$context_info" \
@@ -727,7 +735,7 @@ case "$STATUSLINE_MODE" in
                 "$project_name"
         else
             # If no message, show timing instead
-            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[95m%s\033[0m\n" \
+            printf "\033[%sm%s\033[0m \033[36m▸\033[0m Context: %s \033[36m▸\033[0m Session: \033[96m%s\033[0m \033[36m▸\033[0m %s \033[36m▸\033[0m Last: \033[%sm%s\033[0m \033[36m▸\033[0m \033[34m%s\033[0m\n" \
                 "$model_color" \
                 "$model_display" \
                 "$context_info" \
