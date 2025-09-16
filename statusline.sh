@@ -201,6 +201,11 @@ if echo "$input" | jq -e . >/dev/null 2>&1 && [[ "$input" != "{}" ]]; then
     current_dir=$(echo "$input" | jq -r '.cwd // .workspace.current_dir // empty')
     output_style=$(echo "$input" | jq -r '.output_style.name // "default"')
 
+    # Extract Claude Code's model-aware token data
+    current_tokens=$(echo "$input" | jq -r '.current_tokens // 0')
+    expected_total_tokens=$(echo "$input" | jq -r '.expected_total_tokens // 500000')
+    min_tokens_for_perf_hint=$(echo "$input" | jq -r '.min_tokens_for_perf_hint // 180000')
+
     # If we got valid JSON but no session info, this might be a different JSON structure
     if [[ -z "$session_id" && -z "$transcript_path" ]]; then
         # Try alternative field names
@@ -239,8 +244,73 @@ else
     fi
 fi
 
-# Calculate context usage from transcript
-if [[ -f "$transcript_path" ]]; then
+# Intelligent model context limit detection
+detect_model_context_limit() {
+    local model="$1"
+    local reported_limit="$2"
+
+    # If Claude reports a reasonable limit, trust it
+    if [[ "$reported_limit" -ge 10000 && "$reported_limit" -le 2000000 ]]; then
+        echo "$reported_limit"
+        return
+    fi
+
+    # Model-specific context limits
+    case "$model" in
+        # Sonnet 4 / 3.5 series - 1M context
+        *claude-3-5-sonnet*|*claude-3\.5-sonnet*|*sonnet-3-5*|*sonnet-4*)
+            echo "1000000" ;;
+        # Other Claude models - 200K context
+        *sonnet*|*Sonnet*|*opus*|*Opus*|*haiku*|*Haiku*|*claude*|*Claude*)
+            echo "200000" ;;
+        # OpenAI models
+        *gpt-4o*|*gpt-4-turbo*)
+            echo "128000" ;;
+        *gpt-4*)
+            echo "128000" ;;
+        # Gemini models
+        *gemini*)
+            echo "1048576" ;;
+        # Grok models
+        *grok*)
+            echo "128000" ;;
+        # Default
+        *)
+            echo "500000" ;;
+    esac
+}
+
+# Calculate context usage - prioritize Claude Code data or detect model limits
+if [[ -n "$current_tokens" && "$current_tokens" -gt 0 ]]; then
+    # Claude Code provided the token data directly!
+    estimated_tokens=$current_tokens
+
+    # Use intelligent model context limit detection
+    context_limit=$(detect_model_context_limit "$model_name" $expected_total_tokens)
+
+    # Handle potential over-reporting from Claude
+    if [[ $estimated_tokens -gt $context_limit ]]; then
+        echo "DEBUG: Adjusting over-reported token count" >&2
+        estimated_tokens=$((context_limit / 4 * 3))
+    fi
+
+    # Calculate percentages and format
+    context_percent=$((estimated_tokens * 100 / context_limit))
+    remaining_tokens=$((context_limit - estimated_tokens))
+    remaining_k=$((remaining_tokens / 1000))
+
+    # Color coding for usage levels
+    if [[ $context_percent -gt 80 ]]; then
+        context_color="31"  # Red for high usage
+    elif [[ $context_percent -gt 60 ]]; then
+        context_color="33"  # Yellow for medium usage
+    else
+        context_color="32"  # Green for low usage
+    fi
+
+    context_info=$(printf "\033[%sm%s%%\033[0m (%sk left)" "$context_color" "$context_percent" "$remaining_k")
+
+elif [[ -f "$transcript_path" ]]; then
     # Use enhanced token counting with model detection
     # Map Claude model names to tiktoken-compatible encodings
     case "$model_name" in
@@ -648,6 +718,30 @@ case "$model_name" in
     *claude-instant*)
         model_display="Instant"
         model_color="33"  # Yellow for Instant
+        ;;
+
+    # OpenAI models
+    *gpt-4o*)
+        model_display="GPT-4o"
+        model_color="37"  # White for GPT-4o
+        ;;
+    *gpt-4-turbo*)
+        model_display="GPT-4 Turbo"
+        model_color="31"  # Red for GPT-4 Turbo
+        ;;
+    *gpt-4*)
+        model_display="GPT-4"
+        model_color="31"  # Red for GPT-4
+        ;;
+    *gpt-3.5*)
+        model_display="GPT-3.5"
+        model_color="93"  # Bright Yellow for GPT-3.5
+        ;;
+
+    # xAI Grok models
+    *grok*)
+        model_display="Grok"
+        model_color="33"  # Yellow for Grok
         ;;
     *)
         # Default to extracting version if present
