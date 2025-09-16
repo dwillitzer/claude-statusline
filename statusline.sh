@@ -255,25 +255,44 @@ detect_model_context_limit() {
         return
     fi
 
-    # Model-specific context limits
+    # Model-specific context limits (verified 2025)
     case "$model" in
-        # Sonnet 4 / 3.5 series - 1M context
-        *claude-3-5-sonnet*|*claude-3\.5-sonnet*|*sonnet-3-5*|*sonnet-4*)
-            echo "1000000" ;;
+        # Claude Sonnet 4 - 200K default, 1M with beta header
+        *sonnet-4*|*claude-4*)
+            # Check if we're in 1M mode based on reported limit or context clues
+            if [[ "$reported_limit" -gt 500000 ]]; then
+                echo "1000000"  # 1M context with beta header
+            else
+                echo "200000"   # Standard 200K context
+            fi ;;
+        # Claude 3.5 Sonnet - 200K context (official)
+        *claude-3-5-sonnet*|*claude-3\.5-sonnet*|*sonnet-3-5*)
+            echo "200000" ;;
         # Other Claude models - 200K context
         *sonnet*|*Sonnet*|*opus*|*Opus*|*haiku*|*Haiku*|*claude*|*Claude*)
             echo "200000" ;;
-        # OpenAI models
+        # OpenAI GPT-4.1 series - 1M context (2025)
+        *gpt-4\.1*|*gpt-4-1*)
+            echo "1000000" ;;
+        # OpenAI GPT-4o/4-turbo - 128K context
         *gpt-4o*|*gpt-4-turbo*)
             echo "128000" ;;
         *gpt-4*)
             echo "128000" ;;
-        # Gemini models
+        # Gemini models - varies by version
+        *gemini-1\.5-pro*)
+            echo "2000000" ;;  # Gemini 1.5 Pro has 2M tokens
+        *gemini-2\.5*|*gemini-2\.0*)
+            echo "1048576" ;;  # Gemini 2.x has ~1M tokens
         *gemini*)
-            echo "1048576" ;;
-        # Grok models
+            echo "1048576" ;;  # Default Gemini
+        # xAI Grok models - varies by version
+        *grok-3*)
+            echo "1000000" ;;  # Grok 3 has 1M tokens
+        *grok-4*)
+            echo "256000" ;;   # Grok 4 has 256K tokens
         *grok*)
-            echo "128000" ;;
+            echo "131072" ;;   # Older Grok models ~131K
         # Default
         *)
             echo "500000" ;;
