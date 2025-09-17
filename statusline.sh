@@ -349,11 +349,12 @@ elif [[ -f "$transcript_path" ]]; then
         # Use character estimation for large files
         chars_per_token=${CLAUDE_CHARS_PER_TOKEN:-125}
         transcript_tokens=$((transcript_size / chars_per_token))
-    elif command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-enhanced-token-counter.js" ]]; then
-        # Use accurate token counting for normal-sized files
-        transcript_tokens=$(node "/Users/devops/.claude/claude-enhanced-token-counter.js" "$transcript_path" "$tiktoken_model" 2>/dev/null || echo "0")
-    elif command -v node >/dev/null 2>&1 && [[ -f "/Users/devops/.claude/claude-token-counter.js" ]]; then
-        transcript_tokens=$(node "/Users/devops/.claude/claude-token-counter.js" "$transcript_path" 2>/dev/null || echo "0")
+    elif command -v node >/dev/null 2>&1 && [[ -f "$HOME/.claude/claude-enhanced-token-counter.js" ]]; then
+        # Use accurate token counting for normal-sized files (if available)
+        transcript_tokens=$(node "$HOME/.claude/claude-enhanced-token-counter.js" "$transcript_path" "$tiktoken_model" 2>/dev/null || echo "0")
+    elif command -v node >/dev/null 2>&1 && [[ -f "$HOME/.claude/claude-token-counter.js" ]]; then
+        # Fallback to basic token counter (if available)
+        transcript_tokens=$(node "$HOME/.claude/claude-token-counter.js" "$transcript_path" 2>/dev/null || echo "0")
     else
         # Fallback to character estimation if Node.js or token counter not available
         chars_per_token=${CLAUDE_CHARS_PER_TOKEN:-125}
